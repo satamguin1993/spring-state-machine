@@ -11,13 +11,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.statemachine.StateMachine;
-import org.springframework.statemachine.action.Action;
 import org.springframework.statemachine.config.StateMachineFactory;
 import org.springframework.statemachine.support.DefaultStateMachineContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Random;
+import java.util.Optional;
 
 @RequiredArgsConstructor
 @Service
@@ -33,6 +32,7 @@ public class PaymentServiceImpl implements PaymentService {
     @Override
     public Payment newPayment(Payment payment) {
         payment.setPaymentState(PaymentState.NEW);
+        log.info("Creating new payment");
         return paymentRepository.save(payment);
     }
 
@@ -42,6 +42,25 @@ public class PaymentServiceImpl implements PaymentService {
         StateMachine<PaymentState, PaymentEvent> sm = build(paymentId);
 
         sendEvent(paymentId, sm, PaymentEvent.PRE_AUTHORIZE);
+        return sm;
+    }
+
+    @Transactional
+    @Override
+    public StateMachine<PaymentState, PaymentEvent> authorizePrePayment(long paymentId) {
+        StateMachine<PaymentState, PaymentEvent> sm = build(paymentId);
+
+        //TODO need to check  on the how the state change
+        sendEvent(paymentId, sm, PaymentEvent.PRE_AUTH_APPROVED);
+        return sm;
+    }
+
+    @Transactional
+    @Override
+    public StateMachine<PaymentState, PaymentEvent> declinePrePayment(long paymentId) {
+        StateMachine<PaymentState, PaymentEvent> sm = build(paymentId);
+
+        sendEvent(paymentId, sm, PaymentEvent.PRE_AUTH_DECLINED);
         return sm;
     }
 
@@ -62,6 +81,41 @@ public class PaymentServiceImpl implements PaymentService {
         sendEvent(paymentId, sm, PaymentEvent.AUTH_DECLINED);
         return sm;
     }
+
+    @Override
+    public Payment updatePaymentStatus(Long paymentId, PaymentEvent event) {
+        Optional<Payment> optional = paymentRepository.findById(paymentId);
+        Payment payment = null;
+        if (optional.isPresent()) {
+            switch (event) {
+                case PRE_AUTHORIZE:
+                    preAuth(paymentId);
+                    break;
+                case PRE_AUTH_APPROVED:
+                    authorizePrePayment(paymentId);
+                    break;
+                case PRE_AUTH_DECLINED:
+                    declinePrePayment(paymentId);
+                    break;
+                case AUTH_APPROVED:
+                    authorizePayment(paymentId);
+                    break;
+                case AUTH_DECLINED:
+                    declinePayment(paymentId);
+                    break;
+                default:
+                    log.error("Wrong event has been send paymentId={} event={}", paymentId, event);
+            }
+
+            payment = paymentRepository.getOne(paymentId);
+            log.info("payment info retrieved for paymentId={} paymentState={}",
+                    payment.getId(),
+                    payment.getPaymentState());
+        }
+        return payment;
+    }
+
+    /*********************** All Private Methods **************************************/
 
     private void sendEvent(Long paymentId, StateMachine<PaymentState, PaymentEvent> sm, PaymentEvent event) {
         Message msg = MessageBuilder.withPayload(event)

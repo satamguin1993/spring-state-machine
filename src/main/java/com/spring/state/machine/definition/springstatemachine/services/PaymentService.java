@@ -11,8 +11,13 @@ public interface PaymentService {
 
      StateMachine<PaymentState, PaymentEvent> preAuth(long paymentId);
 
+     StateMachine<PaymentState, PaymentEvent> authorizePrePayment(long paymentId);
+
+     StateMachine<PaymentState, PaymentEvent> declinePrePayment(long paymentId);
+
      StateMachine<PaymentState, PaymentEvent> authorizePayment(long paymentId);
 
      StateMachine<PaymentState, PaymentEvent> declinePayment(long paymentId);
 
+    Payment updatePaymentStatus(Long paymentId, PaymentEvent event);
 }

@@ -1,0 +1,5 @@
+curl --location --request PATCH 'http://localhost:8088/payment/1?event=PRE_AUTHORIZE' \
+--header 'Content-Type: application/json' \
+--data-raw '{
+    "amount" : "12.00"
+}'

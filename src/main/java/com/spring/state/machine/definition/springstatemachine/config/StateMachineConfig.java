@@ -51,7 +51,23 @@ public class StateMachineConfig extends StateMachineConfigurerAdapter<PaymentSta
                 .withExternal()
                 .source(PaymentState.NEW)
                 .target(PaymentState.PRE_AUTH_ERROR)
-                .event(PaymentEvent.PRE_AUTH_DECLINED);
+                .event(PaymentEvent.PRE_AUTH_DECLINED)
+                .and()
+                .withExternal()
+                .source(PaymentState.PRE_AUTH)
+                .target(PaymentState.PRE_AUTH)
+                .event(PaymentEvent.AUTHORIZE)
+                .action(authorizeAction())
+                .and()
+                .withExternal()
+                .source(PaymentState.PRE_AUTH)
+                .target(PaymentState.AUTH)
+                .event(PaymentEvent.AUTH_APPROVED)
+                .and()
+                .withExternal()
+                .source(PaymentState.PRE_AUTH)
+                .target(PaymentState.AUTH_ERROR)
+                .event(PaymentEvent.AUTH_DECLINED);
     }
 
     //Setting up the listener for the state transitions occurred in the state machine
@@ -62,16 +78,20 @@ public class StateMachineConfig extends StateMachineConfigurerAdapter<PaymentSta
                     @Override
                     public void stateChanged(State<PaymentState, PaymentEvent> from, State<PaymentState, PaymentEvent> to) {
                         log.info(String.format("State changed (form: %s to: %s)", from, to));
+                        log.info(String.format("========= State changed (formId: %s toId: %s) =========",
+                                from.getId(),
+                                to.getId()));
                     }
         };
 
         config.withConfiguration().listener(listenerAdapter);
     }
 
+    //TODO need to update the logic in such a way that we can control it
     public Action<PaymentState, PaymentEvent> preAuthAction() {
         return context -> {
-            System.out.println("PreAuth is called !!!");
-            if (new Random().nextInt(10) < 8) {
+            System.out.println("PreAuth Action called !!!");
+            if (new Random().nextInt(10) < 20) {
                 System.out.println("Approved !!!");
                 context.getStateMachine()
                         .sendEvent(MessageBuilder
@@ -83,10 +103,33 @@ public class StateMachineConfig extends StateMachineConfigurerAdapter<PaymentSta
                 System.out.println("Declined. No Credit !!!");
                 context.getStateMachine()
                         .sendEvent(MessageBuilder
-                                .withPayload(PaymentEvent.PRE_AUTH_APPROVED)
+                                .withPayload(PaymentEvent.PRE_AUTH_DECLINED)
                                 .setHeader(PaymentServiceImpl.PAYMENT_ID_HEADER,
                                         context.getMessageHeader(PaymentServiceImpl.PAYMENT_ID_HEADER))
                                 .build());
+            }
+        };
+    }
+
+    public Action<PaymentState, PaymentEvent> authorizeAction() {
+        return context -> {
+            System.out.println("Authorize Action called !!!");
+            if (new Random().nextInt(10) < 20) {
+                System.out.println("Approved Authorize !!!");
+                context.getStateMachine()
+                        .sendEvent(MessageBuilder
+                        .withPayload(PaymentEvent.AUTH_APPROVED)
+                        .setHeader(PaymentServiceImpl.PAYMENT_ID_HEADER,
+                                context.getMessageHeader(PaymentServiceImpl.PAYMENT_ID_HEADER))
+                        .build());
+            } else {
+                System.out.println("Declined Authorize !!!");
+                context.getStateMachine()
+                        .sendEvent(MessageBuilder
+                        .withPayload(PaymentEvent.AUTH_DECLINED)
+                        .setHeader(PaymentServiceImpl.PAYMENT_ID_HEADER,
+                                context.getMessageHeader(PaymentServiceImpl.PAYMENT_ID_HEADER))
+                        .build());
             }
         };
     }
